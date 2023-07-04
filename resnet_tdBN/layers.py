@@ -6,13 +6,14 @@ import torch.nn.functional as F
 #settings
 STEPS = 2
 DT = 5                #时间步长
-SIMWIN = DT * STEPS
+SIMWIN = DT * STEPS   #仿真时间窗口
 ALPHA = 0.5
 VTH = 0.2
 TAU = 0.25
 
 alpha = ALPHA
 
+#产生脉冲的函数，并使用替代导数进行近似
 class SpikeAct(torch.autograd.Function):
     """
     Implementation of the spiking activation function with an approximation of graient
@@ -34,14 +35,14 @@ class SpikeAct(torch.autograd.Function):
 
         return grad_input * hu
 
-
+#膜电位更新函数
 def state_update(u_t_n1, o_t_n1, W_mul_o_t1_n):
     u_t1_n1 = TAU * u_t_n1 * (1 - o_t_n1) + W_mul_o_t1_n
     o_t1_n1 = SpikeAct.apply(u_t1_n1 - VTH)
 
     return u_t1_n1, o_t1_n1
 
-
+#将普通层转换到时间域
 class tdLayer(nn.Module):
     """
     Converts a common layer to the time domain.
@@ -74,7 +75,7 @@ class tdLayer(nn.Module):
 
         return x_
 
-
+#代替ANN版本resnet中的relu激活函数
 class LIFSpike(nn.Module):
 
     def __init__(self, steps=STEPS):
@@ -90,8 +91,18 @@ class LIFSpike(nn.Module):
 
         return out
 
+#tdBN 代替ANN版本resnet的BN
 class tdBatchNorm(nn.BatchNorm2d):
-
+    """
+    在BN时，同时在时间域上做平均。
+    Args:
+        num_features (int): same with nn.BatchNorm2d
+        eps (float): same with nn.BatchNorm2d
+        momentum (float): same with nn.BatchNorm2d
+        alpha (float): an addtional parameter which may change in resblock.
+        affine (bool): same with nn.BatchNorm2d
+        track_running_stats (bool): same with nn.BatchNorm2d
+    """
     def __init__(self, num_features, eps=1e-05, momentum=0.1, alpha=1, affine=True, track_running_stats=True):
         super(tdBatchNorm, self).__init__(
             num_features, eps, momentum, affine, track_running_stats)
